@@ -133,3 +133,4 @@ dmypy.json
 .custom/*
 results/*
 debug_states/*
+*.DS_Store*
