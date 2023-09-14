@@ -2,19 +2,33 @@ import re
 
 
 def split_and_recombine_text(text, desired_length=200, max_length=300):
-    """Split text it into chunks of a desired length trying to keep sentences intact."""
+    """
+    Split text it into chunks of a desired length trying to keep sentences intact.
+    """
+
     # normalize text, remove redundant whitespace and convert non-ascii quotes to ascii
     text = re.sub(r'\n\n+', '\n', text)
     text = re.sub(r'\s+', ' ', text)
     text = re.sub(r'[“”]', '"', text)
 
+    # this variables keeps the final splits of text
     rv = []
+    # this shows if a considered sequence consists of a quote or not
     in_quote = False
+    # this variable keeps the current sequence of text. it is used to keep track of the current split, so after 
+    # choosing a point to split, and appending the current sequence to the rv list, it is reset to an empty string 
+    # again to start a new split.
     current = ""
+    # this list keeps the positions of the proper split points, like end of sentence marks (.!?), new line, \", etc.
     split_pos = []
+    # the pointer to the current character in the input sequence (text)
     pos = -1
+    # final position of the input sequence (text)
     end_pos = len(text) - 1
 
+    # seeks forward (if delta is positive) or backward (if delta is negative) in the sequence, it changes the current 
+    # and pos variables accordingly. also it sets the in_quote variable if a character within the considered range
+    #  is a quotation mark. Finally, the character in the final position is returned.
     def seek(delta):
         nonlocal pos, in_quote, current
         is_neg = delta < 0
@@ -29,41 +43,53 @@ def split_and_recombine_text(text, desired_length=200, max_length=300):
                 in_quote = not in_quote
         return text[pos]
 
+    # returns the character at the position of the current pointer + delta, if the position is within the text length
+    # otherwise it returns an empty string.
     def peek(delta):
         p = pos + delta
         return text[p] if p < end_pos and p >= 0 else ""
 
+    # commit function is used to append the current data to the rv list and reset the current and split_pos variables
+    # for further splits.
     def commit():
         nonlocal rv, current, split_pos
         rv.append(current)
         current = ""
         split_pos = []
-
     while pos < end_pos:
         c = seek(1)
-        # do we need to force a split?
+        # this checks if split is needed
         if len(current) >= max_length:
+            # this checks if there is at least a sentence to split on
             if len(split_pos) > 0 and len(current) > (desired_length / 2):
-                # we have at least one sentence and we are over half the desired length, seek back to the last split
+                # here we have at least one sentence and over half the disired length. So we seek back 
+                # to reach the sentence.
                 d = pos - split_pos[-1]
+                # TODO: shouldn't we update c here?
                 seek(-d)
             else:
-                # no full sentences, seek back until we are not in the middle of a word and split there
+                # there is no full senctences, so we seek back until we are not in a middle of a word, to split the data.
                 while c not in '!?.\n ' and pos > 0 and len(current) > desired_length:
                     c = seek(-1)
+            # commit the data (append the splits to the rv variable) and reset the current and split_pos variables
             commit()
-        # check for sentence boundaries
+        # this checks if we are already at the end of a sentence or a quote, if not, we go in.
         elif not in_quote and (c in '!?\n' or (c == '.' and peek(1) in '\n ')):
-            # seek forward if we have consecutive boundary markers but still within the max length
+            # seeks forward if we have boundary markers while still within the max length
             while pos < len(text) - 1 and len(current) < max_length and peek(1) in '!?.':
                 c = seek(1)
+            # appending the split position to the split_pos variable
             split_pos.append(pos)
+            # commit the data of len current is greater than or equal to the desired length
             if len(current) >= desired_length:
                 commit()
-        # treat end of quote as a boundary if its followed by a space or newline
+        # if we are in a quote, we check if we are at the end of the quote by checking the next character and the on
+        # after, if a quotation mark is followed by a space or a new line, we go two characters forward and commit
+        # the data while adding the end of quot as a split-position in split_pos list.
         elif in_quote and peek(1) == '"' and peek(2) in '\n ':
             seek(2)
             split_pos.append(pos)
+    # appending the split in rv list
     rv.append(current)
 
     # clean up, remove lines with only whitespace or punctuation
@@ -73,6 +99,7 @@ def split_and_recombine_text(text, desired_length=200, max_length=300):
     return rv
 
 
+# This part is just a unit test
 if __name__ == '__main__':
     import os
     import unittest
